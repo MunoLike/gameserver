@@ -1,4 +1,6 @@
+from calendar import c
 import json
+from this import d
 import uuid
 from enum import Enum, IntEnum
 from typing import Optional
@@ -73,3 +75,123 @@ def _update_user(conn, token, name, leader_card_id) -> None:
 def update_user(token: str, name: str, leader_card_id: int) -> None:
     with engine.begin() as conn:
         _update_user(conn, token, name, leader_card_id)
+
+
+# RoomAPIs
+
+
+class LiveDifficulty(Enum):
+    normal = 1
+    hard = 2
+
+
+def create_room(live_id: int, select_difficulty: LiveDifficulty, user: SafeUser) -> Optional[int]:
+    token = str(uuid.uuid4())
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "INSERT INTO `room` (live_id, joined_user_count, token) VALUES (:live_id, 0, :token)"
+            ),
+            {"live_id": live_id, "token": token}
+        )
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "select `room_id` from `room` where `token`=:token"
+            ),
+            {"token": token}
+        )
+
+        row = result.one()
+
+    print(join_room(row.room_id, select_difficulty, user))
+
+    return row.room_id
+
+
+class RoomInfo(BaseModel):
+    room_id: int
+    live_id: int
+    joined_user_count: int
+    max_user_count: int
+
+    class Config:
+        orm_mode = True
+
+
+def list_room(live_id: int) -> Optional[list[RoomInfo]]:
+    room_info_list: list[RoomInfo] = []
+    search_query = ""
+    with engine.begin() as conn:
+        if live_id == 0:
+            search_query = "select * from `room`"
+        else:
+            search_query = "select * from `room` where `live_id`=:live_id"
+
+        result = conn.execute(
+            text(
+                search_query
+            ),
+            {"live_id": live_id}
+        )
+        rooms = result.all()
+
+        for room in rooms:
+            room_info_list.append(RoomInfo.from_orm(room))
+
+    return room_info_list
+
+
+class JoinRoomResult(Enum):
+    Ok = 1,
+    RoomFull = 2,
+    Disbanded = 3,
+    OtherError = 4
+
+
+def _join_room(conn, room_id: int, select_difficulty: LiveDifficulty, user: SafeUser) -> JoinRoomResult:
+
+    result = conn.execute(
+        text(
+            "select * from `room` where `room_id`=:room_id"
+        ),
+        {"room_id": room_id}
+    )
+
+    try:
+        room = result.one()
+    except NoResultFound:
+        return JoinRoomResult.Disbanded
+    if room.joined_user_count == room.max_user_count:
+        return JoinRoomResult.RoomFull
+
+    result = conn.execute(
+        text(
+            "\
+            update `room` \
+            set `joined_user_count`=:updated_user_count \
+            where `room_id`=:room_id\
+            "
+        ),
+        {"updated_user_count": room.joined_user_count+1, "room_id": room_id}
+    )
+
+    result = conn.execute(
+        text(
+            "\
+            insert into `room_user` (`room_id`, `user_id`, `name`, `leader_card_id`, `select_difficulty`)\
+            values (:room_id, :user_id, :name, :leader_card_id, :select_difficulty)\
+            "
+        ),
+        {"room_id": room_id, "user_id": user.id, "name": user.name, "leader_card_id": user.leader_card_id, "select_difficulty": select_difficulty.value}
+    )
+
+
+def join_room(room_id: int, select_difficulty: LiveDifficulty, user: SafeUser) -> JoinRoomResult:
+    with engine.begin() as conn:
+        try:
+            return _join_room(conn, room_id, select_difficulty, user)
+        except Exception as e:
+            print(e)
+            return JoinRoomResult.OtherError
