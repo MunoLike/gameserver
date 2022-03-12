@@ -1,7 +1,6 @@
-from calendar import c
 import json
-from this import d
 import uuid
+from calendar import c
 from enum import Enum, IntEnum
 from typing import Optional
 
@@ -9,6 +8,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import NoResultFound
+from this import d
 
 from .db import engine
 
@@ -85,22 +85,21 @@ class LiveDifficulty(Enum):
     hard = 2
 
 
-def create_room(live_id: int, select_difficulty: LiveDifficulty, user: SafeUser) -> Optional[int]:
+def create_room(
+    live_id: int, select_difficulty: LiveDifficulty, user: SafeUser
+) -> Optional[int]:
     token = str(uuid.uuid4())
     with engine.begin() as conn:
         result = conn.execute(
             text(
                 "INSERT INTO `room` (live_id, joined_user_count, token) VALUES (:live_id, 0, :token)"
             ),
-            {"live_id": live_id, "token": token}
+            {"live_id": live_id, "token": token},
         )
 
     with engine.begin() as conn:
         result = conn.execute(
-            text(
-                "select `room_id` from `room` where `token`=:token"
-            ),
-            {"token": token}
+            text("select `room_id` from `room` where `token`=:token"), {"token": token}
         )
 
         row = result.one()
@@ -129,12 +128,7 @@ def list_room(live_id: int) -> Optional[list[RoomInfo]]:
         else:
             search_query = "select * from `room` where `live_id`=:live_id"
 
-        result = conn.execute(
-            text(
-                search_query
-            ),
-            {"live_id": live_id}
-        )
+        result = conn.execute(text(search_query), {"live_id": live_id})
         rooms = result.all()
 
         for room in rooms:
@@ -144,19 +138,18 @@ def list_room(live_id: int) -> Optional[list[RoomInfo]]:
 
 
 class JoinRoomResult(Enum):
-    Ok = 1,
-    RoomFull = 2,
-    Disbanded = 3,
+    Ok = (1,)
+    RoomFull = (2,)
+    Disbanded = (3,)
     OtherError = 4
 
 
-def _join_room(conn, room_id: int, select_difficulty: LiveDifficulty, user: SafeUser) -> JoinRoomResult:
+def _join_room(
+    conn, room_id: int, select_difficulty: LiveDifficulty, user: SafeUser
+) -> JoinRoomResult:
 
     result = conn.execute(
-        text(
-            "select * from `room` where `room_id`=:room_id"
-        ),
-        {"room_id": room_id}
+        text("select * from `room` where `room_id`=:room_id"), {"room_id": room_id}
     )
 
     try:
@@ -174,7 +167,7 @@ def _join_room(conn, room_id: int, select_difficulty: LiveDifficulty, user: Safe
             where `room_id`=:room_id\
             "
         ),
-        {"updated_user_count": room.joined_user_count+1, "room_id": room_id}
+        {"updated_user_count": room.joined_user_count + 1, "room_id": room_id},
     )
 
     result = conn.execute(
@@ -184,11 +177,21 @@ def _join_room(conn, room_id: int, select_difficulty: LiveDifficulty, user: Safe
             values (:room_id, :user_id, :name, :leader_card_id, :select_difficulty)\
             "
         ),
-        {"room_id": room_id, "user_id": user.id, "name": user.name, "leader_card_id": user.leader_card_id, "select_difficulty": select_difficulty.value}
+        {
+            "room_id": room_id,
+            "user_id": user.id,
+            "name": user.name,
+            "leader_card_id": user.leader_card_id,
+            "select_difficulty": select_difficulty.value,
+        },
     )
 
+    return JoinRoomResult.Ok
 
-def join_room(room_id: int, select_difficulty: LiveDifficulty, user: SafeUser) -> JoinRoomResult:
+
+def join_room(
+    room_id: int, select_difficulty: LiveDifficulty, user: SafeUser
+) -> JoinRoomResult:
     with engine.begin() as conn:
         try:
             return _join_room(conn, room_id, select_difficulty, user)
