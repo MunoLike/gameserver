@@ -306,5 +306,29 @@ def result_room(room_id: int) -> list[ResultUser]:
     return results
 
 
-def leave_room(req: room_id, user: SafeUser):
-    pass
+def leave_room(room_id: int, user: SafeUser):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "\
+                    delete from `room_user` \
+                    where `user_id` = :user_id \
+                "
+            ),
+            {"user_id": user.id},
+        )
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("select `joined_user_count` from `room` where `room_id` = :room_id"),
+            {"room_id": room_id},
+        )
+
+        room = result.one()
+
+        conn.execute(
+            text(
+                "update `room` set `joined_user_count`=:count where `room_id` = :room_id"
+            ),
+            {"room_id": room_id, "count": room.joined_user_count - 1},
+        )
