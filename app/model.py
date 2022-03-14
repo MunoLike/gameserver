@@ -1,7 +1,8 @@
 import json
+from sys import int_info
 import uuid
 from calendar import c
-from enum import Enum, IntEnum
+from enum import Enum
 from typing import Optional
 
 from fastapi import HTTPException
@@ -92,9 +93,9 @@ def create_room(
     with engine.begin() as conn:
         result = conn.execute(
             text(
-                "INSERT INTO `room` (live_id, joined_user_count, token) VALUES (:live_id, 0, :token)"
+                "INSERT INTO `room` (live_id, host_id, joined_user_count, token) VALUES (:live_id, :host_id, 0, :token)"
             ),
-            {"live_id": live_id, "token": token},
+            {"live_id": live_id, "host_id":user.id, "token": token},
         )
 
     with engine.begin() as conn:
@@ -198,3 +199,55 @@ def join_room(
         except Exception as e:
             print(e)
             return JoinRoomResult.OtherError
+
+
+class WaitRoomStatus(Enum):
+    Waiting = 1
+    LiveStart = 2
+    Dissolution = 3
+
+
+class RoomUser(BaseModel):
+    user_id: int
+    name: str
+    leader_card_id: int
+    select_difficulty: LiveDifficulty
+    is_me: Optional[bool]
+    is_host: Optional[bool]
+
+    class Config:
+        orm_mode = True
+
+
+def wait_room(room_id: int, user: SafeUser) -> tuple[WaitRoomStatus, list[RoomUser]]:
+    members_list: list[RoomUser] = []
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "select * from `room` where `room_id`=:room_id"
+            ),
+            {"room_id": room_id}
+        )
+
+        try:
+            room = result.one()
+        except NoResultFound:
+            return (WaitRoomStatus.Dissolution, None)
+
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "select * from `room_user` where `room_id`=:room_id"
+            ),
+            {"room_id": room_id}
+        )
+
+        members = result.all()
+
+        for i, member in enumerate(members):
+            members_list.append(RoomUser.from_orm(member))
+            members_list[i].is_me = (members_list[i].user_id == user.id)
+            members_list[i].is_host = (members_list[i].user_id == room.host_id)
+
+    return (WaitRoomStatus(room.wait_status), members_list)
