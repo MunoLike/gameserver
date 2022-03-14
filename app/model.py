@@ -1,8 +1,8 @@
 import json
-from sys import int_info
 import uuid
 from calendar import c
 from enum import Enum
+from sys import int_info
 from typing import Optional
 
 from fastapi import HTTPException
@@ -95,7 +95,7 @@ def create_room(
             text(
                 "INSERT INTO `room` (live_id, host_id, joined_user_count, token) VALUES (:live_id, :host_id, 0, :token)"
             ),
-            {"live_id": live_id, "host_id":user.id, "token": token},
+            {"live_id": live_id, "host_id": user.id, "token": token},
         )
 
     with engine.begin() as conn:
@@ -223,10 +223,7 @@ def wait_room(room_id: int, user: SafeUser) -> tuple[WaitRoomStatus, list[RoomUs
     members_list: list[RoomUser] = []
     with engine.begin() as conn:
         result = conn.execute(
-            text(
-                "select * from `room` where `room_id`=:room_id"
-            ),
-            {"room_id": room_id}
+            text("select * from `room` where `room_id`=:room_id"), {"room_id": room_id}
         )
 
         try:
@@ -234,20 +231,17 @@ def wait_room(room_id: int, user: SafeUser) -> tuple[WaitRoomStatus, list[RoomUs
         except NoResultFound:
             return (WaitRoomStatus.Dissolution, None)
 
-
     with engine.begin() as conn:
         result = conn.execute(
-            text(
-                "select * from `room_user` where `room_id`=:room_id"
-            ),
-            {"room_id": room_id}
+            text("select * from `room_user` where `room_id`=:room_id"),
+            {"room_id": room_id},
         )
 
         members = result.all()
 
         for i, member in enumerate(members):
             members_list.append(RoomUser.from_orm(member))
-            members_list[i].is_me = (members_list[i].user_id == user.id)
-            members_list[i].is_host = (members_list[i].user_id == room.host_id)
+            members_list[i].is_me = members_list[i].user_id == user.id
+            members_list[i].is_host = members_list[i].user_id == room.host_id
 
     return (WaitRoomStatus(room.wait_status), members_list)
