@@ -1,6 +1,3 @@
-from enum import Enum
-from select import select
-
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security.http import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -9,6 +6,7 @@ from . import model
 from .model import (
     JoinRoomResult,
     LiveDifficulty,
+    ResultUser,
     RoomInfo,
     RoomUser,
     SafeUser,
@@ -144,3 +142,40 @@ def room_wait(req: RoomWaitRequest, token: str = Depends(get_auth_token)):
     if not room_user_list:
         room_user_list = []
     return RoomWaitResponse(status=status, room_user_list=room_user_list)
+
+
+class RoomStartRequest(BaseModel):
+    room_id: int
+
+
+@app.post("/room/start")
+def room_start(req: RoomStartRequest):
+    model.start_room(req.room_id)
+    return {}
+
+
+class RoomEndRequest(BaseModel):
+    room_id: int
+    judge_count_list: list[int]
+    score: int
+
+
+@app.post("/room/end")
+def room_end(req: RoomEndRequest, token: str = Depends(get_auth_token)):
+    user = _user_me(token)
+    model.end_room(req.room_id, req.judge_count_list, req.score, user)
+    return {}
+
+
+class RoomResultResponse(BaseModel):
+    result_user_list: list[ResultUser]
+
+
+class RoomResultRequest(BaseModel):
+    room_id: int
+
+
+@app.post("/room/result", response_model=RoomResultResponse)
+def room_result(req: RoomResultRequest):
+    result_user_list = model.result_room(req.room_id)
+    return RoomResultResponse(result_user_list=result_user_list)

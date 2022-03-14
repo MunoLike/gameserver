@@ -1,9 +1,8 @@
 import json
 import uuid
-from calendar import c
 from enum import Enum
 from sys import int_info
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -245,3 +244,67 @@ def wait_room(room_id: int, user: SafeUser) -> tuple[WaitRoomStatus, list[RoomUs
             members_list[i].is_host = members_list[i].user_id == room.host_id
 
     return (WaitRoomStatus(room.wait_status), members_list)
+
+
+def start_room(room_id: int):
+    with engine.begin() as conn:
+        conn.execute(
+            text("update `room` set `wait_status` = 2 where `room_id` = :room_id"),
+            {"room_id": room_id},
+        )
+
+
+def end_room(room_id: int, judge_count_list: list[int], score: int, user: SafeUser):
+    print(room_id, judge_count_list, score, user)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "\
+                    update `room_user` \
+                    set `judge_count_list` = :judge_count_list, `score` = :score \
+                    where `user_id` = :user_id and `room_id` = :room_id \
+                "
+            ),
+            {
+                "judge_count_list": json.dumps(judge_count_list),
+                "score": score,
+                "user_id": user.id,
+                "room_id": room_id,
+            },
+        )
+
+
+class ResultUser(BaseModel):
+    user_id: int
+    judge_count_list: list
+    score: int
+
+
+def result_room(room_id: int) -> list[ResultUser]:
+    results: list[ResultUser] = []
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "select `user_id`, `judge_count_list`, `score` from `room_user` where `room_id` = :room_id"
+            ),
+            {"room_id": room_id},
+        )
+
+        members = result.all()
+
+        for member in members:
+            if member.score == -1:
+                return []
+
+            r = ResultUser(
+                user_id=member.user_id,
+                judge_count_list=json.loads(member.judge_count_list),
+                score=member.score,
+            )
+            results.append(r)
+
+    return results
+
+
+def leave_room(req: room_id, user: SafeUser):
+    pass
