@@ -8,7 +8,7 @@ from .db import engine
 
 class TimeLimitter():
     def __init__(self, room_id: int):
-        self.wait_time: int = 300
+        self.wait_time: int = 230
         self.room_id: int = room_id
 
     def __call__(self):
