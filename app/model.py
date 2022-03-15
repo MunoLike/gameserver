@@ -1,14 +1,11 @@
 import json
 import uuid
 from enum import Enum
-from sys import int_info
-from typing import Any, Optional
+from typing import Optional
 
-from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import NoResultFound
-from this import d
 
 from .db import engine
 
@@ -33,7 +30,7 @@ def create_user(name: str, leader_card_id: int) -> str:
     token = str(uuid.uuid4())
     # NOTE: tokenが衝突したらリトライする必要がある.
     with engine.begin() as conn:
-        result = conn.execute(
+        conn.execute(
             text(
                 "INSERT INTO `user` (name, token, leader_card_id) VALUES (:name, :token, :leader_card_id)"
             ),
@@ -138,9 +135,9 @@ def list_room(live_id: int) -> Optional[list[RoomInfo]]:
 
 
 class JoinRoomResult(Enum):
-    Ok = (1,)
-    RoomFull = (2,)
-    Disbanded = (3,)
+    Ok = 1
+    RoomFull = 2
+    Disbanded = 3
     OtherError = 4
 
 
