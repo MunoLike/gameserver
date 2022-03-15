@@ -1,6 +1,8 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, BackgroundTasks
 from fastapi.security.http import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+from .time_limitter import TimeLimitter
 
 from . import model
 from .model import (
@@ -149,8 +151,9 @@ class RoomStartRequest(BaseModel):
 
 
 @app.post("/room/start")
-def room_start(req: RoomStartRequest):
+def room_start(req: RoomStartRequest, bg_tasks: BackgroundTasks):
     model.start_room(req.room_id)
+    bg_tasks.add_task(TimeLimitter(req.room_id))
     return {}
 
 
@@ -176,8 +179,9 @@ class RoomResultRequest(BaseModel):
 
 
 @app.post("/room/result", response_model=RoomResultResponse)
-def room_result(req: RoomResultRequest):
-    result_user_list = model.result_room(req.room_id)
+def room_result(req: RoomResultRequest, token: str = Depends(get_auth_token)):
+    user = _user_me(token)
+    result_user_list = model.result_room(req.room_id, user)
     return RoomResultResponse(result_user_list=result_user_list)
 
 

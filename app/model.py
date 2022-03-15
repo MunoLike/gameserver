@@ -160,11 +160,11 @@ def _join_room(
         text(
             "\
             update `room` \
-            set `joined_user_count`=:updated_user_count \
+            set `joined_user_count`=`joined_user_count` + 1 \
             where `room_id`=:room_id\
             "
         ),
-        {"updated_user_count": room.joined_user_count + 1, "room_id": room_id},
+        {"room_id": room_id},
     )
 
     result = conn.execute(
@@ -277,7 +277,7 @@ class ResultUser(BaseModel):
     score: int
 
 
-def result_room(room_id: int) -> list[ResultUser]:
+def result_room(room_id: int, user: SafeUser) -> list[ResultUser]:
     results: list[ResultUser] = []
     with engine.begin() as conn:
         result = conn.execute(
@@ -300,6 +300,8 @@ def result_room(room_id: int) -> list[ResultUser]:
             )
             results.append(r)
 
+    leave_room(room_id=room_id, user=user)
+
     return results
 
 
@@ -315,17 +317,18 @@ def leave_room(room_id: int, user: SafeUser):
             {"user_id": user.id},
         )
 
-    with engine.begin() as conn:
-        result = conn.execute(
-            text("select `joined_user_count` from `room` where `room_id` = :room_id"),
+        conn.execute(
+            text(
+                "update `room` set `joined_user_count` = `joined_user_count` - 1 where `room_id` = :room_id"
+            ),
             {"room_id": room_id},
         )
 
-        room = result.one()
-
+    with engine.begin() as conn:
         conn.execute(
             text(
-                "update `room` set `joined_user_count`=:count where `room_id` = :room_id"
-            ),
-            {"room_id": room_id, "count": room.joined_user_count - 1},
+                """
+                delete from `room` where `joined_user_count` = 0
+                """
+            )
         )
