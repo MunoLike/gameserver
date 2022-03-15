@@ -121,9 +121,9 @@ def list_room(live_id: int) -> Optional[list[RoomInfo]]:
     search_query = ""
     with engine.begin() as conn:
         if live_id == 0:
-            search_query = "select * from `room`"
+            search_query = "select * from `room` where `wait_status` = 1"
         else:
-            search_query = "select * from `room` where `live_id`=:live_id"
+            search_query = "select * from `room` where `live_id`=:live_id where `wait_status` = 1"
 
         result = conn.execute(text(search_query), {"live_id": live_id})
         rooms = result.all()
