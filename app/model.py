@@ -271,6 +271,25 @@ def end_room(room_id: int, judge_count_list: list[int], score: int, user: SafeUs
         )
 
 
+def _delete_room_if_empty(room_id: int):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                delete from `room_user` where `room_id` in (select `room_id` from `room` where `joined_user_count` = 1)
+                """
+            )
+        )
+
+        conn.execute(
+            text(
+                """
+                delete from `room` where `joined_user_count` = 0
+                """
+            )
+        )
+
+
 class ResultUser(BaseModel):
     user_id: int
     judge_count_list: list
@@ -300,7 +319,14 @@ def result_room(room_id: int, user: SafeUser) -> list[ResultUser]:
             )
             results.append(r)
 
-    leave_room(room_id=room_id, user=user)
+        conn.execute(
+            text(
+                "update `room` set `joined_user_count` = `joined_user_count` - 1 where `room_id` = :room_id"
+            ),
+            {"room_id": room_id},
+        )
+
+    _delete_room_if_empty(room_id)
 
     return results
 
@@ -324,11 +350,4 @@ def leave_room(room_id: int, user: SafeUser):
             {"room_id": room_id},
         )
 
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                delete from `room` where `joined_user_count` = 0
-                """
-            )
-        )
+    _delete_room_if_empty(room_id)
