@@ -123,7 +123,7 @@ def list_room(live_id: int) -> Optional[list[RoomInfo]]:
         if live_id == 0:
             search_query = "select * from `room` where `wait_status` = 1"
         else:
-            search_query = "select * from `room` where `live_id`=:live_id where `wait_status` = 1"
+            search_query = "select * from `room` where `live_id`=:live_id and `wait_status` = 1"
 
         result = conn.execute(text(search_query), {"live_id": live_id})
         rooms = result.all()
@@ -276,7 +276,7 @@ def _delete_room_if_empty(room_id: int):
         conn.execute(
             text(
                 """
-                delete from `room_user` where `room_id` in (select `room_id` from `room` where `joined_user_count` = 1)
+                delete from `room_user` where `room_id` in (select `room_id` from `room` where `joined_user_count` = 0)
                 """
             )
         )
